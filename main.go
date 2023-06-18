@@ -32,6 +32,14 @@ func main() {
 
 	//service
 	getCmd.AddCommand(ecs.ListServices())
+	describeCmd.AddCommand(ecs.DescribeService())
+
+	//taskdefinition
+	getCmd.AddCommand(ecs.ListTaskDefinition())
+	describeCmd.AddCommand(ecs.DescribeTaskDefinition())
+
+	//task
+	getCmd.AddCommand(ecs.ListTasks())
 
 	//root
 	rootCmd.AddCommand(getCmd)
