@@ -3,8 +3,10 @@ package ecs
 import (
 	"fmt"
 	"log"
+	"nami/pkg/cw"
 	"os"
 	"strings"
+	"sync"
 	"text/tabwriter"
 
 	"github.com/aws/aws-sdk-go/aws"
@@ -100,50 +102,81 @@ func ListServices() *cobra.Command {
 			client := ecs.New(sess)
 
 			input := &ecs.ListServicesInput{
-				Cluster: aws.String(cluster),
+				Cluster:    aws.String(cluster),
+				MaxResults: aws.Int64(100),
 			}
 
 			result, err := client.ListServices(input)
-
 			if err != nil {
 				fmt.Println(err)
 				os.Exit(0)
 			}
 
 			w := tabwriter.NewWriter(os.Stdout, 0, 0, 3, ' ', 0)
-			fmt.Fprintln(w, "NAME\tTASK DEFINITION\tRUNNING\tLAUNCH")
+			fmt.Fprintln(w, "NAME\tTASK DEFINITION\tRUNNING\tCPU\tMEMORY\tLAUNCH")
+
+			utilizationCh := make(chan struct {
+				CPU    float64
+				Memory float64
+			}, len(result.ServiceArns))
+
+			var wg sync.WaitGroup
 
 			for _, serviceArn := range result.ServiceArns {
-				serviceName := NameArn(*serviceArn)
-				input := &ecs.DescribeServicesInput{
-					Services: []*string{
-						aws.String(serviceName),
-					},
-					Cluster: aws.String(cluster),
-				}
-				result, err1 := client.DescribeServices(input)
-				if err1 != nil {
-					fmt.Println(err1)
-					os.Exit(0)
-				}
-				service := result.Services[0]
-				taskdef := NameArn(aws.StringValue(service.TaskDefinition))
-				running := aws.Int64Value(service.RunningCount)
-				desired := aws.Int64Value(service.DesiredCount)
-				launchtype := aws.StringValue(service.LaunchType)
+				wg.Add(1)
 
-				fmt.Fprintf(w, "%s\t%s\t%d/%d\t%s\n", serviceName, taskdef, running, desired, launchtype)
+				go func(serviceArn string) {
+					defer wg.Done()
+
+					serviceName := NameArn(serviceArn)
+					input := &ecs.DescribeServicesInput{
+						Services: []*string{
+							aws.String(serviceName),
+						},
+						Cluster: aws.String(cluster),
+					}
+
+					serviceResult, err := client.DescribeServices(input)
+					if err != nil {
+						fmt.Println(err)
+						return
+					}
+
+					cpu := cw.CpuAverage(cluster, serviceName)
+					memory := cw.MemoryAverage(cluster, serviceName)
+					utilizationCh <- struct {
+						CPU    float64
+						Memory float64
+					}{CPU: cpu, Memory: memory}
+
+					service := serviceResult.Services[0]
+					taskdef := NameArn(aws.StringValue(service.TaskDefinition))
+					running := aws.Int64Value(service.RunningCount)
+					desired := aws.Int64Value(service.DesiredCount)
+					launchtype := aws.StringValue(service.LaunchType)
+
+					fmt.Fprintf(w, "%s\t%s\t%d/%d\t%.2f%%\t%.2f%%\t%s\n", serviceName, taskdef, running, desired, cpu, memory, launchtype)
+				}(aws.StringValue(serviceArn))
+			}
+
+			go func() {
+				wg.Wait()
+				close(utilizationCh)
+			}()
+
+			for util := range utilizationCh {
+				_ = util.CPU
+				_ = util.Memory
 			}
 
 			w.Flush()
-
 		},
 	}
+
 	cmd.Flags().StringVarP(&cluster, "cluster", "c", "string", "ECS Cluster name")
 	cmd.MarkFlagRequired("cluster")
 
 	return cmd
-
 }
 
 func DescribeService() *cobra.Command {
