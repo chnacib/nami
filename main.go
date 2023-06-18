@@ -40,7 +40,7 @@ func main() {
 
 	//task
 	getCmd.AddCommand(ecs.ListTasks())
-
+	describeCmd.AddCommand(ecs.DescribeTask())
 	//root
 	rootCmd.AddCommand(getCmd)
 	rootCmd.AddCommand(describeCmd)
