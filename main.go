@@ -14,6 +14,13 @@ func main() {
 		Use:   "nami",
 		Short: "Nami CLI",
 	}
+	//logs
+	logsCmd := &cobra.Command{
+		Use:     "logs",
+		Aliases: []string{"log"},
+		Short:   "Retrieve log events from service/task",
+	}
+
 	//get
 	getCmd := &cobra.Command{
 		Use:   "get",
@@ -24,6 +31,8 @@ func main() {
 		Use:   "describe",
 		Short: "Describe Resources",
 	}
+	rootCmd.AddCommand(Version())
+
 	//login
 	rootCmd.AddCommand(pulumi.Login())
 	//cluster
@@ -33,6 +42,7 @@ func main() {
 	//service
 	getCmd.AddCommand(ecs.ListServices())
 	describeCmd.AddCommand(ecs.DescribeService())
+	logsCmd.AddCommand(ecs.ServiceLogs())
 
 	//taskdefinition
 	getCmd.AddCommand(ecs.ListTaskDefinition())
@@ -41,13 +51,31 @@ func main() {
 	//task
 	getCmd.AddCommand(ecs.ListTasks())
 	describeCmd.AddCommand(ecs.DescribeTask())
+	logsCmd.AddCommand(ecs.TaskLogs())
 	//root
 	rootCmd.AddCommand(getCmd)
 	rootCmd.AddCommand(describeCmd)
+	rootCmd.AddCommand(logsCmd)
 
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Println("Error:", err)
 		os.Exit(1)
 	}
+
+}
+
+func Version() *cobra.Command {
+	var version string = "alpha"
+
+	cmd := &cobra.Command{
+		Use:     "version",
+		Aliases: []string{"v"},
+		Short:   "Show version",
+		Run: func(cmd *cobra.Command, args []string) {
+			fmt.Println(version)
+
+		},
+	}
+	return cmd
 
 }

@@ -11,6 +11,7 @@ import (
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go/service/cloudwatchlogs"
 	"github.com/aws/aws-sdk-go/service/ecs"
 	"github.com/spf13/cobra"
 )
@@ -30,9 +31,11 @@ func ListClusters() *cobra.Command {
 
 			client := ecs.New(sess)
 
-			input := &ecs.ListClustersInput{}
+			input := &ecs.ListClustersInput{
+				MaxResults: aws.Int64(100),
+			}
 
-			result, err := client.ListClusters(input)
+			response, err := client.ListClusters(input)
 			if err != nil {
 				log.Fatal(err)
 			}
@@ -40,7 +43,7 @@ func ListClusters() *cobra.Command {
 			w := tabwriter.NewWriter(os.Stdout, 0, 0, 3, ' ', 0)
 			fmt.Fprintln(w, "NAME\tARN")
 
-			for _, clusterArn := range result.ClusterArns {
+			for _, clusterArn := range response.ClusterArns {
 				clusterName := NameArn(*clusterArn)
 				fmt.Fprintf(w, "%s\t%s\n", clusterName, *clusterArn)
 			}
@@ -72,13 +75,13 @@ func DescribeCluster() *cobra.Command {
 					aws.String(name),
 				}}
 
-			result, err := client.DescribeClusters(input)
+			response, err := client.DescribeClusters(input)
 			if err != nil {
 				fmt.Println("Failed to describe ECS cluster: Cluster not found")
 				os.Exit(0)
 			}
 
-			fmt.Println(result)
+			fmt.Println(response)
 
 		},
 	}
@@ -106,7 +109,7 @@ func ListServices() *cobra.Command {
 				MaxResults: aws.Int64(100),
 			}
 
-			result, err := client.ListServices(input)
+			response, err := client.ListServices(input)
 			if err != nil {
 				fmt.Println(err)
 				os.Exit(0)
@@ -118,11 +121,11 @@ func ListServices() *cobra.Command {
 			utilizationCh := make(chan struct {
 				CPU    float64
 				Memory float64
-			}, len(result.ServiceArns))
+			}, len(response.ServiceArns))
 
 			var wg sync.WaitGroup
 
-			for _, serviceArn := range result.ServiceArns {
+			for _, serviceArn := range response.ServiceArns {
 				wg.Add(1)
 
 				go func(serviceArn string) {
@@ -136,7 +139,7 @@ func ListServices() *cobra.Command {
 						Cluster: aws.String(cluster),
 					}
 
-					serviceResult, err := client.DescribeServices(input)
+					serviceresponse, err := client.DescribeServices(input)
 					if err != nil {
 						fmt.Println(err)
 						return
@@ -149,7 +152,7 @@ func ListServices() *cobra.Command {
 						Memory float64
 					}{CPU: cpu, Memory: memory}
 
-					service := serviceResult.Services[0]
+					service := serviceresponse.Services[0]
 					taskdef := NameArn(aws.StringValue(service.TaskDefinition))
 					running := aws.Int64Value(service.RunningCount)
 					desired := aws.Int64Value(service.DesiredCount)
@@ -199,13 +202,13 @@ func DescribeService() *cobra.Command {
 				Cluster: aws.String(cluster),
 			}
 
-			result, err := client.DescribeServices(input)
+			response, err := client.DescribeServices(input)
 			if err != nil {
 				fmt.Println(err)
 				os.Exit(0)
 			}
 
-			fmt.Println(result)
+			fmt.Println(response)
 
 		},
 	}
@@ -232,7 +235,7 @@ func ListTaskDefinition() *cobra.Command {
 				Status: aws.String("ACTIVE"),
 			}
 
-			result, err := client.ListTaskDefinitionFamilies(input)
+			response, err := client.ListTaskDefinitionFamilies(input)
 			if err != nil {
 				fmt.Println(err)
 				os.Exit(0)
@@ -241,7 +244,7 @@ func ListTaskDefinition() *cobra.Command {
 			w := tabwriter.NewWriter(os.Stdout, 0, 0, 3, ' ', 0)
 			fmt.Fprintln(w, "NAME\t")
 
-			for _, tasks := range result.Families {
+			for _, tasks := range response.Families {
 				task := *tasks
 				input := &ecs.DescribeTaskDefinitionInput{
 					TaskDefinition: aws.String(task),
@@ -295,12 +298,14 @@ func DescribeTaskDefinition() *cobra.Command {
 
 }
 
+//Tasks
+
 func ListTasks() *cobra.Command {
 	var cluster string
 	cmd := &cobra.Command{
 		Use:     "tasks",
 		Aliases: []string{"tsk", "task"},
-		Short:   "Describe ECS task definition",
+		Short:   "List ECS tasks from services",
 		Run: func(cmd *cobra.Command, args []string) {
 			service := args[0]
 			sess := session.Must(session.NewSessionWithOptions(session.Options{
@@ -379,6 +384,152 @@ func DescribeTask() *cobra.Command {
 				os.Exit(0)
 			}
 			fmt.Println(response)
+
+		},
+	}
+
+	cmd.Flags().StringVarP(&cluster, "cluster", "c", "string", "ECS Cluster name")
+	cmd.MarkFlagRequired("cluster")
+
+	return cmd
+
+}
+
+func ServiceLogs() *cobra.Command {
+	var cluster string
+
+	cmd := &cobra.Command{
+		Use:     "service",
+		Aliases: []string{"svc", "services"},
+		Short:   "Get ECS service log events",
+		Run: func(cmd *cobra.Command, args []string) {
+			service := args[0]
+			sess := session.Must(session.NewSessionWithOptions(session.Options{
+				SharedConfigState: session.SharedConfigEnable,
+			}))
+			client := ecs.New(sess)
+			client_cw := cloudwatchlogs.New(sess)
+			input := &ecs.DescribeServicesInput{
+				Services: []*string{
+					aws.String(service),
+				},
+				Cluster: aws.String(cluster),
+			}
+
+			response, err := client.DescribeServices(input)
+			if err != nil {
+				fmt.Println(err)
+				os.Exit(0)
+			}
+			task_def := aws.StringValue(response.Services[0].TaskDefinition)
+
+			task_input := &ecs.DescribeTaskDefinitionInput{
+				TaskDefinition: aws.String(task_def),
+			}
+
+			result, err_task := client.DescribeTaskDefinition(task_input)
+			if err != nil {
+				fmt.Println(err_task)
+				os.Exit(0)
+			}
+			log_group := aws.StringValue(result.TaskDefinition.ContainerDefinitions[0].LogConfiguration.Options["awslogs-group"])
+			log_prefix := aws.StringValue(result.TaskDefinition.ContainerDefinitions[0].LogConfiguration.Options["awslogs-stream-prefix"])
+
+			streamsOutput, err := client_cw.DescribeLogStreams(&cloudwatchlogs.DescribeLogStreamsInput{
+				LogGroupName:        aws.String(log_group),
+				LogStreamNamePrefix: aws.String(log_prefix),
+			})
+			if err != nil {
+				fmt.Println("Failed to describe log streams:", err)
+				return
+			}
+
+			for _, streams := range streamsOutput.LogStreams {
+				log_stream := *streams.LogStreamName
+				fmt.Println("############## %s ##################", log_stream)
+				log_input := &cloudwatchlogs.GetLogEventsInput{
+					LogGroupName:  aws.String(log_group),
+					LogStreamName: aws.String(log_stream),
+					Limit:         aws.Int64(100),
+				}
+				output, err := client_cw.GetLogEvents(log_input)
+				if err != nil {
+					fmt.Println(err)
+					os.Exit(0)
+				}
+				for _, outputs := range output.Events {
+					message := *outputs.Message
+					fmt.Println(message)
+				}
+
+			}
+
+		},
+	}
+
+	cmd.Flags().StringVarP(&cluster, "cluster", "c", "string", "ECS Cluster name")
+	cmd.MarkFlagRequired("cluster")
+
+	return cmd
+
+}
+
+func TaskLogs() *cobra.Command {
+	var cluster string
+
+	cmd := &cobra.Command{
+		Use:     "task",
+		Aliases: []string{"tsk", "tasks"},
+		Short:   "Get ECS task log events",
+		Run: func(cmd *cobra.Command, args []string) {
+			task := args[0]
+			sess := session.Must(session.NewSessionWithOptions(session.Options{
+				SharedConfigState: session.SharedConfigEnable,
+			}))
+			client := ecs.New(sess)
+			client_cw := cloudwatchlogs.New(sess)
+			input := &ecs.DescribeTasksInput{
+				Tasks: []*string{
+					aws.String(task),
+				},
+				Cluster: aws.String(cluster),
+			}
+
+			response, err := client.DescribeTasks(input)
+			if err != nil {
+				fmt.Println(err)
+				os.Exit(0)
+			}
+			container := aws.StringValue(response.Tasks[0].Containers[0].Name)
+
+			task_def := aws.StringValue(response.Tasks[0].TaskDefinitionArn)
+
+			task_input := &ecs.DescribeTaskDefinitionInput{
+				TaskDefinition: aws.String(task_def),
+			}
+			result, err_task := client.DescribeTaskDefinition(task_input)
+			if err != nil {
+				fmt.Println(err_task)
+				os.Exit(0)
+			}
+			log_group := aws.StringValue(result.TaskDefinition.ContainerDefinitions[0].LogConfiguration.Options["awslogs-group"])
+			log_prefix := aws.StringValue(result.TaskDefinition.ContainerDefinitions[0].LogConfiguration.Options["awslogs-stream-prefix"])
+			log_stream := fmt.Sprintf("%s/%s/%s", log_prefix, container, task)
+
+			log_input := &cloudwatchlogs.GetLogEventsInput{
+				LogGroupName:  aws.String(log_group),
+				LogStreamName: aws.String(log_stream),
+				Limit:         aws.Int64(100),
+			}
+			output, err := client_cw.GetLogEvents(log_input)
+			if err != nil {
+				fmt.Println(err)
+				os.Exit(0)
+			}
+			for _, outputs := range output.Events {
+				message := *outputs.Message
+				fmt.Println(message)
+			}
 
 		},
 	}
