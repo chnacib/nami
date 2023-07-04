@@ -302,11 +302,17 @@ func DescribeTaskDefinition() *cobra.Command {
 
 func ListTasks() *cobra.Command {
 	var cluster string
+
 	cmd := &cobra.Command{
 		Use:     "tasks",
 		Aliases: []string{"tsk", "task"},
 		Short:   "List ECS tasks from services",
 		Run: func(cmd *cobra.Command, args []string) {
+			if len(args) == 0 {
+				fmt.Println("No service specified")
+				return
+			}
+
 			service := args[0]
 			sess := session.Must(session.NewSessionWithOptions(session.Options{
 				SharedConfigState: session.SharedConfigEnable,
@@ -321,41 +327,49 @@ func ListTasks() *cobra.Command {
 			response, err := client.ListTasks(input)
 			if err != nil {
 				fmt.Println(err)
+				return
+			}
+
+			var taskArns []*string
+			for _, taskArn := range response.TaskArns {
+				taskArns = append(taskArns, taskArn)
+			}
+
+			describeTasksInput := &ecs.DescribeTasksInput{
+				Tasks:   taskArns,
+				Cluster: aws.String(cluster),
+			}
+
+			describeTasksOutput, err := client.DescribeTasks(describeTasksInput)
+			if err != nil {
+				fmt.Println(err)
+				return
 			}
 
 			w := tabwriter.NewWriter(os.Stdout, 0, 0, 3, ' ', 0)
+			defer w.Flush()
+
 			fmt.Fprintln(w, "NAME\tREVISION\tSTATUS\tCPU\tMEMORY\tNETWORK\tSTARTED")
 
-			for _, tasks := range response.TaskArns {
-				task_name := NameArn(*tasks)
-				input := &ecs.DescribeTasksInput{
-					Tasks: []*string{
-						aws.String(*tasks),
-					},
-					Cluster: aws.String(cluster),
-				}
-				response, err := client.DescribeTasks(input)
-				if err != nil {
-					fmt.Println(err)
-					os.Exit(0)
-				}
-				task := response.Tasks[0]
+			for _, task := range describeTasksOutput.Tasks {
+				taskName := NameArn(aws.StringValue(task.TaskArn))
 				revision := NameArn(aws.StringValue(task.TaskDefinitionArn))
 				cpu := aws.StringValue(task.Cpu)
 				memory := aws.StringValue(task.Memory)
 				status := aws.StringValue(task.LastStatus)
 				network := aws.StringValue(task.Containers[0].NetworkInterfaces[0].PrivateIpv4Address)
-				time_start := aws.TimeValue(task.StartedAt)
-				format_time := time_start.Format("2006-01-02 15:04:05")
-				fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\t%s\n", task_name, revision, status, cpu, memory, network, format_time)
+				timeStart := aws.TimeValue(task.StartedAt)
+				formatTime := timeStart.Format("2006-01-02 15:04:05")
+
+				fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\t%s\n", taskName, revision, status, cpu, memory, network, formatTime)
 			}
-			w.Flush()
 		},
 	}
+
 	cmd.Flags().StringVarP(&cluster, "cluster", "c", "string", "ECS Cluster name")
 	cmd.MarkFlagRequired("cluster")
-	return cmd
 
+	return cmd
 }
 
 func DescribeTask() *cobra.Command {
@@ -409,44 +423,48 @@ func ServiceLogs() *cobra.Command {
 			}))
 			client := ecs.New(sess)
 			client_cw := cloudwatchlogs.New(sess)
-			input := &ecs.DescribeServicesInput{
-				Services: []*string{
-					aws.String(service),
-				},
-				Cluster: aws.String(cluster),
+
+			input_list_tasks := &ecs.ListTasksInput{
+				ServiceName: aws.String(service),
+				Cluster:     aws.String(cluster),
 			}
 
-			response, err := client.DescribeServices(input)
+			list_tasks, err := client.ListTasks(input_list_tasks)
 			if err != nil {
 				fmt.Println(err)
-				os.Exit(0)
-			}
-			task_def := aws.StringValue(response.Services[0].TaskDefinition)
-
-			task_input := &ecs.DescribeTaskDefinitionInput{
-				TaskDefinition: aws.String(task_def),
 			}
 
-			result, err_task := client.DescribeTaskDefinition(task_input)
-			if err != nil {
-				fmt.Println(err_task)
-				os.Exit(0)
-			}
-			log_group := aws.StringValue(result.TaskDefinition.ContainerDefinitions[0].LogConfiguration.Options["awslogs-group"])
-			log_prefix := aws.StringValue(result.TaskDefinition.ContainerDefinitions[0].LogConfiguration.Options["awslogs-stream-prefix"])
+			for _, tasks := range list_tasks.TaskArns {
+				task := NameArn(*tasks)
+				fmt.Println(task)
+				input := &ecs.DescribeTasksInput{
+					Tasks: []*string{
+						aws.String(*tasks),
+					},
+					Cluster: aws.String(cluster),
+				}
 
-			streamsOutput, err := client_cw.DescribeLogStreams(&cloudwatchlogs.DescribeLogStreamsInput{
-				LogGroupName:        aws.String(log_group),
-				LogStreamNamePrefix: aws.String(log_prefix),
-			})
-			if err != nil {
-				fmt.Println("Failed to describe log streams:", err)
-				return
-			}
+				response, err := client.DescribeTasks(input)
+				if err != nil {
+					fmt.Println(err)
+					os.Exit(0)
+				}
+				container := aws.StringValue(response.Tasks[0].Containers[0].Name)
 
-			for _, streams := range streamsOutput.LogStreams {
-				log_stream := *streams.LogStreamName
-				fmt.Println("############## %s ##################", log_stream)
+				task_def := aws.StringValue(response.Tasks[0].TaskDefinitionArn)
+
+				task_input := &ecs.DescribeTaskDefinitionInput{
+					TaskDefinition: aws.String(task_def),
+				}
+				result, err_task := client.DescribeTaskDefinition(task_input)
+				if err != nil {
+					fmt.Println(err_task)
+					os.Exit(0)
+				}
+				log_group := aws.StringValue(result.TaskDefinition.ContainerDefinitions[0].LogConfiguration.Options["awslogs-group"])
+				log_prefix := aws.StringValue(result.TaskDefinition.ContainerDefinitions[0].LogConfiguration.Options["awslogs-stream-prefix"])
+				log_stream := fmt.Sprintf("%s/%s/%s", log_prefix, container, task)
+
 				log_input := &cloudwatchlogs.GetLogEventsInput{
 					LogGroupName:  aws.String(log_group),
 					LogStreamName: aws.String(log_stream),
