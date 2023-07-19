@@ -4,6 +4,7 @@ go 1.19
 
 require (
 	github.com/aws/aws-sdk-go v1.44.284
+	github.com/gorilla/websocket v1.5.0
 	github.com/spf13/cobra v1.7.0
 )
 
