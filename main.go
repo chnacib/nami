@@ -52,6 +52,9 @@ func main() {
 	getCmd.AddCommand(ecs.ListTasks())
 	describeCmd.AddCommand(ecs.DescribeTask())
 	logsCmd.AddCommand(ecs.TaskLogs())
+
+	//exec
+	rootCmd.AddCommand(ecs.Exec())
 	//root
 	rootCmd.AddCommand(getCmd)
 	rootCmd.AddCommand(describeCmd)
