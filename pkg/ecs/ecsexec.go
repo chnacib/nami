@@ -66,9 +66,9 @@ func Exec() *cobra.Command {
 				UpdateService(service, cluster)
 
 			}
-
-			ExecuteCommand(cluster, task, container, command)
-
+			if enable_execute_cmd == true && status == "RUNNING" {
+				ExecuteCommand(cluster, task, container, command)
+			}
 		},
 	}
 	cmd.Flags().StringVarP(&cluster, "cluster", "c", "string", "ECS Cluster name")
@@ -158,6 +158,7 @@ func ExecuteCommand(cluster, task, container, command string) {
 
 	err := output.Run()
 	if err != nil {
+		fmt.Println(err)
 		log.Fatal(err)
 	}
 

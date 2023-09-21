@@ -29,36 +29,65 @@ func main() {
 	//describe
 	describeCmd := &cobra.Command{
 		Use:   "describe",
-		Short: "Describe Resources",
+		Short: "Describe resources",
 	}
 	rootCmd.AddCommand(Version())
+
+	//set
+	setCmd := &cobra.Command{
+		Use:   "set",
+		Short: "Set config",
+	}
+
+	//delete
+
+	deleteCmd := &cobra.Command{
+		Use:   "delete",
+		Short: "Delete resources",
+	}
 
 	//login
 	rootCmd.AddCommand(pulumi.Login())
 	//cluster
 	getCmd.AddCommand(ecs.ListClusters())
 	describeCmd.AddCommand(ecs.DescribeCluster())
+	deleteCmd.AddCommand(ecs.DeleteCluster())
 
 	//service
 	getCmd.AddCommand(ecs.ListServices())
 	describeCmd.AddCommand(ecs.DescribeService())
 	logsCmd.AddCommand(ecs.ServiceLogs())
+	deleteCmd.AddCommand(ecs.DeleteService())
 
 	//taskdefinition
 	getCmd.AddCommand(ecs.ListTaskDefinition())
 	describeCmd.AddCommand(ecs.DescribeTaskDefinition())
 
+	//revision
+	getCmd.AddCommand(ecs.ListTaskDefinitionRevision())
+
 	//task
 	getCmd.AddCommand(ecs.ListTasks())
 	describeCmd.AddCommand(ecs.DescribeTask())
 	logsCmd.AddCommand(ecs.TaskLogs())
+	deleteCmd.AddCommand(ecs.DeleteTask())
 
 	//exec
 	rootCmd.AddCommand(ecs.Exec())
+
+	//replicas
+	setCmd.AddCommand(ecs.Replicas())
+
+	//autoscaling
+	getCmd.AddCommand(ecs.ListAutoscaling())
+	setCmd.AddCommand(ecs.Autoscaling())
+
 	//root
 	rootCmd.AddCommand(getCmd)
 	rootCmd.AddCommand(describeCmd)
 	rootCmd.AddCommand(logsCmd)
+	rootCmd.AddCommand(setCmd)
+	rootCmd.AddCommand(deleteCmd)
 
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Println("Error:", err)
