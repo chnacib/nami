@@ -39,8 +39,8 @@ func ListTasks() *cobra.Command {
 
 			response, err := client.ListTasks(input)
 			if err != nil {
-				fmt.Println(err)
-				return
+				fmt.Printf("Tasks not found for %s", service)
+				os.Exit(0)
 			}
 
 			var taskArns []*string
@@ -55,8 +55,8 @@ func ListTasks() *cobra.Command {
 
 			describeTasksOutput, err := client.DescribeTasks(describeTasksInput)
 			if err != nil {
-				fmt.Println(err)
-				return
+				fmt.Printf("Tasks not found for %s\n", service)
+				os.Exit(0)
 			}
 
 			w := tabwriter.NewWriter(os.Stdout, 0, 0, 3, ' ', 0)
