@@ -12,8 +12,6 @@ import (
 
 func DescribeCluster() *cobra.Command {
 
-	var name string
-
 	cmd := &cobra.Command{
 		Use:   "cluster",
 		Short: "Describe ECS Cluster",
@@ -22,11 +20,13 @@ func DescribeCluster() *cobra.Command {
 				SharedConfigState: session.SharedConfigEnable,
 			}))
 
+			cluster := args[0]
+
 			client := ecs.New(sess)
 
 			input := &ecs.DescribeClustersInput{
 				Clusters: []*string{
-					aws.String(name),
+					aws.String(cluster),
 				}}
 
 			response, err := client.DescribeClusters(input)
@@ -39,8 +39,6 @@ func DescribeCluster() *cobra.Command {
 
 		},
 	}
-	cmd.Flags().StringVarP(&name, "name", "n", "string", "ECS Cluster name")
-	cmd.MarkFlagRequired("name")
 
 	return cmd
 }

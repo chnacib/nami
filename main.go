@@ -65,6 +65,7 @@ func main() {
 
 	//revision
 	getCmd.AddCommand(ecs.ListTaskDefinitionRevision())
+	setCmd.AddCommand(ecs.UpdateRevision())
 
 	//task
 	getCmd.AddCommand(ecs.ListTasks())

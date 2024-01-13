@@ -77,6 +77,26 @@ func Exec() *cobra.Command {
 	return cmd
 }
 
+func UpdateService(service string, cluster string) {
+	sess := session.Must(session.NewSessionWithOptions(session.Options{
+		SharedConfigState: session.SharedConfigEnable,
+	}))
+	client := ecs.New(sess)
+
+	_, err := client.UpdateService(&ecs.UpdateServiceInput{
+		Cluster:              aws.String(cluster),
+		Service:              aws.String(service),
+		EnableExecuteCommand: aws.Bool(true),
+		ForceNewDeployment:   aws.Bool(true),
+	})
+
+	if err != nil {
+		fmt.Println("Failed to update ECS service:", err)
+		os.Exit(0)
+	}
+
+}
+
 func Format(str string) string {
 	var result string
 	index := strings.Index(str, ":")
@@ -122,30 +142,6 @@ func AttachPolicy(role_arn string) {
 	}
 
 	fmt.Println("Inline policy attached to IAM role successfully.")
-
-}
-
-func UpdateService(service string, cluster string) {
-	sess := session.Must(session.NewSessionWithOptions(session.Options{
-		SharedConfigState: session.SharedConfigEnable,
-	}))
-	client := ecs.New(sess)
-
-	_, err := client.UpdateService(&ecs.UpdateServiceInput{
-		Cluster:              aws.String(cluster),
-		Service:              aws.String(service),
-		EnableExecuteCommand: aws.Bool(true),
-		ForceNewDeployment:   aws.Bool(true),
-	})
-
-	if err != nil {
-		fmt.Println("Failed to update ECS service:", err)
-		return
-	}
-
-	fmt.Println("Execute command Enabled")
-	fmt.Println("Service updated successfully")
-	fmt.Println("Wait for new deployment and run again")
 
 }
 
