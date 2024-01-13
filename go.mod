@@ -1,4 +1,4 @@
-module nami
+module github.com/chnacib/nami
 
 go 1.19
 
