@@ -2,9 +2,10 @@ package main
 
 import (
 	"fmt"
-	"nami/pkg/ecs"
-	"nami/pkg/pulumi"
 	"os"
+
+	"github.com/chnacib/nami/pkg/ecs"
+	"github.com/chnacib/nami/pkg/pulumi"
 
 	"github.com/spf13/cobra"
 )
@@ -65,6 +66,7 @@ func main() {
 
 	//revision
 	getCmd.AddCommand(ecs.ListTaskDefinitionRevision())
+	setCmd.AddCommand(ecs.UpdateRevision())
 
 	//task
 	getCmd.AddCommand(ecs.ListTasks())

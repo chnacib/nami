@@ -23,12 +23,20 @@ func ListTaskDefinitionRevision() *cobra.Command {
 			sess := session.Must(session.NewSessionWithOptions(session.Options{
 				SharedConfigState: session.SharedConfigEnable,
 			}))
+
+			if len(args) == 0 {
+				fmt.Println("Missing required argument: task definition")
+				os.Exit(1)
+			}
+
 			taskdef = args[0]
+
 			client := ecs.New(sess)
 
 			input := &ecs.ListTaskDefinitionsInput{
 				Status:       aws.String("ACTIVE"),
 				FamilyPrefix: aws.String(taskdef),
+				MaxResults:   aws.Int64(20),
 			}
 
 			response, err := client.ListTaskDefinitions(input)

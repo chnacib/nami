@@ -13,6 +13,7 @@ import (
 
 func TaskLogs() *cobra.Command {
 	var cluster string
+	var limit int64
 
 	cmd := &cobra.Command{
 		Use:     "task",
@@ -56,7 +57,7 @@ func TaskLogs() *cobra.Command {
 			log_input := &cloudwatchlogs.GetLogEventsInput{
 				LogGroupName:  aws.String(log_group),
 				LogStreamName: aws.String(log_stream),
-				Limit:         aws.Int64(100),
+				Limit:         aws.Int64(limit),
 			}
 			output, err := client_cw.GetLogEvents(log_input)
 			if err != nil {
@@ -71,6 +72,7 @@ func TaskLogs() *cobra.Command {
 		},
 	}
 
+	cmd.Flags().Int64VarP(&limit, "limit", "l", 100, "Logs max result")
 	cmd.Flags().StringVarP(&cluster, "cluster", "c", "string", "ECS Cluster name")
 	cmd.MarkFlagRequired("cluster")
 

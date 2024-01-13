@@ -187,27 +187,6 @@ func registerScalableTarget(clusterName, serviceName string, minCapacity, maxCap
 	return nil
 }
 
-func Replicas() *cobra.Command {
-	var cluster string
-	var desired int64
-	cmd := &cobra.Command{
-		Use:     "replicas",
-		Aliases: []string{"replica"},
-		Short:   "Register autoscaling config",
-		Run: func(cmd *cobra.Command, args []string) {
-			service := args[0]
-			UpdateDesiredCount(service, cluster, desired)
-
-		},
-	}
-
-	cmd.Flags().Int64VarP(&desired, "desired", "d", 0, "Desired count")
-	cmd.MarkFlagRequired("desired")
-	cmd.Flags().StringVarP(&cluster, "cluster", "c", "string", "ECS Cluster name")
-	cmd.MarkFlagRequired("cluster")
-	return cmd
-}
-
 func UpdateDesiredCount(service string, cluster string, desired int64) {
 	sess := session.Must(session.NewSessionWithOptions(session.Options{
 		SharedConfigState: session.SharedConfigEnable,
@@ -227,4 +206,25 @@ func UpdateDesiredCount(service string, cluster string, desired int64) {
 
 	fmt.Printf("%s desired count updated to %d\n", service, desired)
 
+}
+
+func Replicas() *cobra.Command {
+	var cluster string
+	var desired int64
+	cmd := &cobra.Command{
+		Use:     "replicas",
+		Aliases: []string{"replica"},
+		Short:   "Register autoscaling config",
+		Run: func(cmd *cobra.Command, args []string) {
+			service := args[0]
+			UpdateDesiredCount(service, cluster, desired)
+
+		},
+	}
+
+	cmd.Flags().Int64VarP(&desired, "desired", "d", 0, "Desired count")
+	cmd.MarkFlagRequired("desired")
+	cmd.Flags().StringVarP(&cluster, "cluster", "c", "string", "ECS Cluster name")
+	cmd.MarkFlagRequired("cluster")
+	return cmd
 }
