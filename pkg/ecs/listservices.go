@@ -2,10 +2,11 @@ package ecs
 
 import (
 	"fmt"
-	"nami/pkg/cw"
 	"os"
 	"sync"
 	"text/tabwriter"
+
+	"github.com/chnacib/nami/pkg/cw"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
