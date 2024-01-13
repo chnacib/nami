@@ -2,9 +2,10 @@ package main
 
 import (
 	"fmt"
-	"nami/pkg/ecs"
-	"nami/pkg/pulumi"
 	"os"
+
+	"github.com/chnacib/nami/pkg/ecs"
+	"github.com/chnacib/nami/pkg/pulumi"
 
 	"github.com/spf13/cobra"
 )
