@@ -59,13 +59,10 @@ func registerScalableTarget(clusterName, serviceName string, minCapacity, maxCap
 
 	client_ecs := ecs.New(sess)
 
-	// Create an AWS Application Auto Scaling client
 	client := applicationautoscaling.NewFromConfig(cfg)
 
-	// Specify the resource ID of the scalable target
 	resourceID := fmt.Sprintf("service/%s/%s", clusterName, serviceName)
 
-	// Set the parameters for the scalable target registration
 	input := &applicationautoscaling.RegisterScalableTargetInput{
 		ServiceNamespace:  types.ServiceNamespaceEcs,
 		ResourceId:        &resourceID,
