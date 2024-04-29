@@ -3,6 +3,8 @@ package ecs
 import (
 	"fmt"
 	"os"
+	"sort"
+	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
@@ -11,9 +13,16 @@ import (
 	"github.com/spf13/cobra"
 )
 
+type Message struct {
+	Timestamp string
+	Message   string
+}
+
 func TaskLogs() *cobra.Command {
 	var cluster string
 	var limit int64
+	var GetQueryResultOutput *cloudwatchlogs.GetQueryResultsOutput
+	var logs []Message
 
 	cmd := &cobra.Command{
 		Use:     "task",
@@ -39,7 +48,9 @@ func TaskLogs() *cobra.Command {
 				os.Exit(0)
 			}
 			container := aws.StringValue(response.Tasks[0].Containers[0].Name)
-
+			if container == "xray-daemon" {
+				container = aws.StringValue(response.Tasks[0].Containers[1].Name)
+			}
 			task_def := aws.StringValue(response.Tasks[0].TaskDefinitionArn)
 
 			task_input := &ecs.DescribeTaskDefinitionInput{
@@ -54,25 +65,62 @@ func TaskLogs() *cobra.Command {
 			log_prefix := aws.StringValue(result.TaskDefinition.ContainerDefinitions[0].LogConfiguration.Options["awslogs-stream-prefix"])
 			log_stream := fmt.Sprintf("%s/%s/%s", log_prefix, container, task)
 
-			log_input := &cloudwatchlogs.GetLogEventsInput{
-				LogGroupName:  aws.String(log_group),
-				LogStreamName: aws.String(log_stream),
-				Limit:         aws.Int64(limit),
+			query_string := fmt.Sprintf("filter @logStream = '%s' | fields @timestamp, @message | sort @timestamp desc | limit %d", log_stream, limit)
+
+			StartQueryInput := &cloudwatchlogs.StartQueryInput{
+				QueryString:  aws.String(query_string),
+				LogGroupName: aws.String(log_group),
+				EndTime:      aws.Int64(time.Now().UnixNano() / int64(time.Millisecond)),
+				StartTime:    aws.Int64(5),
 			}
-			output, err := client_cw.GetLogEvents(log_input)
+			StartQueryOutput, err := client_cw.StartQuery(StartQueryInput)
 			if err != nil {
 				fmt.Println(err)
 				os.Exit(0)
 			}
-			for _, outputs := range output.Events {
-				message := *outputs.Message
-				fmt.Println(message)
+			query_id := aws.String(*StartQueryOutput.QueryId)
+
+			GetQueryResultInput := &cloudwatchlogs.GetQueryResultsInput{
+				QueryId: aws.String(*query_id),
+			}
+
+			for {
+				GetQueryResultOutput, err = client_cw.GetQueryResults(GetQueryResultInput)
+				if err != nil {
+					fmt.Println(err)
+					os.Exit(0)
+				}
+				status := aws.String(*GetQueryResultOutput.Status)
+				if *status == "Complete" {
+					break
+				}
+				time.Sleep(1 * time.Second)
+			}
+
+			for _, result := range GetQueryResultOutput.Results {
+				timestamp := aws.String(*result[0].Value)
+				message := aws.String(*result[1].Value)
+				logs = append(logs, Message{
+					Timestamp: *timestamp,
+					Message:   *message,
+				})
+
+			}
+
+			sort.SliceStable(logs, func(i, j int) bool {
+				t1, _ := time.Parse(time.RFC3339Nano, logs[i].Timestamp)
+				t2, _ := time.Parse(time.RFC3339Nano, logs[j].Timestamp)
+				return t1.After(t2)
+			})
+
+			for i := len(logs) - 1; i >= 0; i-- {
+				fmt.Printf("%s    %s\n", logs[i].Timestamp, logs[i].Message)
 			}
 
 		},
 	}
 
-	cmd.Flags().Int64VarP(&limit, "limit", "l", 100, "Logs max result")
+	cmd.Flags().Int64VarP(&limit, "limit", "l", 200, "Logs max result")
 	cmd.Flags().StringVarP(&cluster, "cluster", "c", "string", "ECS Cluster name")
 	cmd.MarkFlagRequired("cluster")
 
