@@ -50,7 +50,7 @@ func Exec() *cobra.Command {
 			service = Format(aws.StringValue(response.Tasks[0].Group))
 			task_def := aws.StringValue(response.Tasks[0].TaskDefinitionArn)
 
-			if enable_execute_cmd == false && status == "RUNNING" {
+			if !enable_execute_cmd && status == "RUNNING" {
 				fmt.Println("Execute command is disabled")
 				input := &ecs.DescribeTaskDefinitionInput{
 					TaskDefinition: aws.String(task_def),
@@ -66,7 +66,7 @@ func Exec() *cobra.Command {
 				UpdateService(service, cluster)
 
 			}
-			if enable_execute_cmd == true && status == "RUNNING" {
+			if enable_execute_cmd && status == "RUNNING" {
 				ExecuteCommand(cluster, task, container, command)
 			}
 		},

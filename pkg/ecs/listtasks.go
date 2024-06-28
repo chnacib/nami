@@ -51,7 +51,6 @@ func ListTasks() *cobra.Command {
 				}
 
 				w := tabwriter.NewWriter(os.Stdout, 0, 0, 3, ' ', 0)
-				//defer w.Flush()
 
 				fmt.Fprintln(w, "NAME\tREVISION\tSTATUS\tCPU\tMEMORY\tNETWORK\tSTARTED")
 

@@ -60,6 +60,9 @@ func main() {
 	logsCmd.AddCommand(ecs.ServiceLogs())
 	deleteCmd.AddCommand(ecs.DeleteService())
 
+	//nodes
+	getCmd.AddCommand(ecs.ListNodes())
+
 	//taskdefinition
 	getCmd.AddCommand(ecs.ListTaskDefinition())
 	describeCmd.AddCommand(ecs.DescribeTaskDefinition())
