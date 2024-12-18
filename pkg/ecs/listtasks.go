@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"text/tabwriter"
+	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
@@ -16,6 +17,9 @@ import (
 func ListTasks() *cobra.Command {
 	var cluster string
 	var taskArns []*string
+	var timeStart time.Time
+	var formatTime string
+	var network string
 
 	cmd := &cobra.Command{
 		Use:     "tasks",
@@ -55,63 +59,28 @@ func ListTasks() *cobra.Command {
 				fmt.Fprintln(w, "NAME\tREVISION\tSTATUS\tCPU\tMEMORY\tNETWORK\tSTARTED")
 
 				for _, task := range describeTasksOutput.Tasks {
+
 					taskName := NameArn(aws.StringValue(task.TaskArn))
 					revision := NameArn(aws.StringValue(task.TaskDefinitionArn))
 					cpu := aws.StringValue(task.Cpu)
 					memory := aws.StringValue(task.Memory)
 					status := aws.StringValue(task.LastStatus)
-					network := aws.StringValue(task.Containers[0].NetworkInterfaces[0].PrivateIpv4Address)
-					timeStart := aws.TimeValue(task.StartedAt)
-					formatTime := timeStart.Format("2006-01-02 15:04:05")
+					if len(task.Containers) > 0 {
+						network = aws.StringValue(task.Containers[0].NetworkInterfaces[0].PrivateIpv4Address)
+					} else {
+						network = "-"
+					}
+					if task.StartedAt != nil {
+						timeStart = aws.TimeValue(task.StartedAt)
+						formatTime = timeStart.Format("2006-01-02 15:04:05")
+					} else {
+						formatTime = "-"
+					}
 
 					fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\t%s\n", taskName, revision, status, cpu, memory, network, formatTime)
 				}
 				w.Flush()
 				os.Exit(0)
-			}
-
-			service := args[0]
-
-			input := &ecs.ListTasksInput{
-				ServiceName: aws.String(service),
-				Cluster:     aws.String(cluster),
-			}
-
-			response, err := client.ListTasks(input)
-			if err != nil {
-				fmt.Printf("Tasks not found for %s", service)
-				os.Exit(0)
-			}
-
-			taskArns = append(taskArns, response.TaskArns...)
-
-			describeTasksInput := &ecs.DescribeTasksInput{
-				Tasks:   taskArns,
-				Cluster: aws.String(cluster),
-			}
-
-			describeTasksOutput, err := client.DescribeTasks(describeTasksInput)
-			if err != nil {
-				fmt.Printf("Tasks not found for %s\n", service)
-				os.Exit(0)
-			}
-
-			w := tabwriter.NewWriter(os.Stdout, 0, 0, 3, ' ', 0)
-			defer w.Flush()
-
-			fmt.Fprintln(w, "NAME\tREVISION\tSTATUS\tCPU\tMEMORY\tNETWORK\tSTARTED")
-
-			for _, task := range describeTasksOutput.Tasks {
-				taskName := NameArn(aws.StringValue(task.TaskArn))
-				revision := NameArn(aws.StringValue(task.TaskDefinitionArn))
-				cpu := aws.StringValue(task.Cpu)
-				memory := aws.StringValue(task.Memory)
-				status := aws.StringValue(task.LastStatus)
-				network := aws.StringValue(task.Containers[0].NetworkInterfaces[0].PrivateIpv4Address)
-				timeStart := aws.TimeValue(task.StartedAt)
-				formatTime := timeStart.Format("2006-01-02 15:04:05")
-
-				fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\t%s\n", taskName, revision, status, cpu, memory, network, formatTime)
 			}
 		},
 	}
