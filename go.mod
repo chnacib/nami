@@ -1,6 +1,8 @@
 module github.com/chnacib/nami
 
-go 1.19
+go 1.21
+
+toolchain go1.22.5
 
 require (
 	github.com/aws/aws-sdk-go v1.44.284
@@ -22,6 +24,8 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.14.13 // indirect
 	github.com/aws/aws-sdk-go-v2/service/sts v1.20.0 // indirect
 	github.com/aws/smithy-go v1.13.5 // indirect
+	github.com/davecgh/go-spew v1.1.1 // indirect
+	github.com/google/go-cmp v0.6.0 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/jmespath/go-jmespath v0.4.0 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
