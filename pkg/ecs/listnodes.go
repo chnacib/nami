@@ -34,7 +34,7 @@ func ListNodes() *cobra.Command {
 
 			list_response, err := client.ListContainerInstances(list_input)
 			if err != nil {
-				log.Fatal(err)
+				log.Fatal("Nodes not found for cluster")
 			}
 			w := tabwriter.NewWriter(os.Stdout, 0, 0, 3, ' ', 0)
 			fmt.Fprintln(w, "NAME\tNETWORK\tSIZE\tREGISTERED CPU\tREGISTERED MEMORY\tREMAINING CPU\tREMAINING MEMORY\tSTATUS")
