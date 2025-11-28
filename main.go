@@ -47,6 +47,13 @@ func main() {
 		Short: "Delete resources",
 	}
 
+	//deploy
+
+	deployCmd := &cobra.Command{
+		Use:   "deploy",
+		Short: "Deploy ecs services",
+	}
+
 	//login
 	rootCmd.AddCommand(pulumi.Login())
 	//cluster
@@ -93,6 +100,7 @@ func main() {
 	rootCmd.AddCommand(logsCmd)
 	rootCmd.AddCommand(setCmd)
 	rootCmd.AddCommand(deleteCmd)
+	rootCmd.AddCommand(deployCmd)
 
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Println("Error:", err)
