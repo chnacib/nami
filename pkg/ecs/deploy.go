@@ -24,6 +24,7 @@ type DeployOptions struct {
 	Timeout       time.Duration
 }
 
+// Deploy retorna o comando `nami deploy`
 func Deploy() *cobra.Command {
 	var (
 		cluster       string
@@ -38,7 +39,6 @@ func Deploy() *cobra.Command {
 		Use:   "deploy",
 		Short: "Deploy a new image to an ECS service (CI friendly)",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			// flags + env vars
 			if cluster == "" {
 				cluster = os.Getenv("NAMI_CLUSTER")
 			}
@@ -146,10 +146,8 @@ func deployService(ctx context.Context, opts DeployOptions) (string, error) {
 	}
 
 	if opts.ContainerName == "" {
-		// comportamento padrão: usa sempre o container de índice 0
 		containers[0].Image = aws.String(opts.Image)
 	} else {
-		// se containerName foi informado, procura pelo nome
 		found := false
 		for i, c := range containers {
 			if aws.ToString(c.Name) == opts.ContainerName {
@@ -205,62 +203,19 @@ func deployService(ctx context.Context, opts DeployOptions) (string, error) {
 		return newTDArn, nil
 	}
 
-	waitCtx := ctx
-	if opts.Timeout > 0 {
-		var cancel context.CancelFunc
-		waitCtx, cancel = context.WithTimeout(ctx, opts.Timeout)
-		defer cancel()
+	maxWait := opts.Timeout
+	if maxWait <= 0 {
+		maxWait = 5 * time.Minute
 	}
 
-	ticker := time.NewTicker(5 * time.Second)
-	defer ticker.Stop()
+	waiter := awsecs.NewServicesStableWaiter(client)
 
-	for {
-		select {
-		case <-waitCtx.Done():
-			return "", fmt.Errorf("wait for deployment steady state timed out after %s", opts.Timeout)
-		case <-ticker.C:
-			dsOut, err := client.DescribeServices(waitCtx, &awsecs.DescribeServicesInput{
-				Cluster:  aws.String(opts.Cluster),
-				Services: []string{opts.Service},
-			})
-			if err != nil {
-				return "", fmt.Errorf("describe service while waiting: %w", err)
-			}
-
-			if len(dsOut.Services) == 0 {
-				return "", fmt.Errorf("service %q disappeared while waiting", opts.Service)
-			}
-
-			s := dsOut.Services[0]
-
-			if len(s.Deployments) == 0 {
-				continue
-			}
-
-			allStable := true
-			hasPrimaryNewTD := false
-
-			for _, d := range s.Deployments {
-				status := aws.ToString(d.Status)
-
-				if aws.ToString(d.TaskDefinition) == newTDArn && status == "PRIMARY" {
-					hasPrimaryNewTD = true
-				}
-
-				if status == "IN_PROGRESS" {
-					allStable = false
-					break
-				}
-			}
-
-			if !hasPrimaryNewTD {
-				allStable = false
-			}
-
-			if allStable && s.RunningCount == s.DesiredCount {
-				return newTDArn, nil
-			}
-		}
+	if err := waiter.Wait(ctx, &awsecs.DescribeServicesInput{
+		Cluster:  aws.String(opts.Cluster),
+		Services: []string{opts.Service},
+	}, maxWait); err != nil {
+		return "", fmt.Errorf("waiting for service to stabilize: %w", err)
 	}
+
+	return newTDArn, nil
 }
